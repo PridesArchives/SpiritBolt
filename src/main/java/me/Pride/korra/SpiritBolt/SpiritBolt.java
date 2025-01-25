@@ -42,6 +42,7 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 	@Attribute(Attribute.CHARGE_DURATION)
 	private long chargeTime;
 	private int maxBolts;
+	private boolean enableCubeAnimation;
 
 	private int numBolts;
 	private boolean charged;
@@ -69,6 +70,7 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 		this.cooldown = ConfigManager.getConfig().getLong(config + "Cooldown");
 		this.chargeTime = ConfigManager.getConfig().getLong(config + "ChargeTime");
 		this.maxBolts = ConfigManager.getConfig().getInt(config + "MaxBolts");
+		this.enableCubeAnimation = ConfigManager.getConfig().getBoolean(config + "EnableCubeAnimation");
 
 		this.numBolts = maxBolts;
 
@@ -77,7 +79,6 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 
 		this.startPoint = ThreadLocalRandom.current().nextInt(0, 360);
 		this.points = new int[3];
-		this.cubes = new ArmorStand[3];
 
 		this.rad = 1.5;
 
@@ -92,18 +93,22 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 				points[i] = points[i - 1] + partition;
 			}
 		}
-		for (int i = 0; i < cubes.length; i++) {
-			ArmorStand cube = player.getWorld().spawn(player.getLocation().clone().add(GeneralMethods.getOrthogonalVector(player.getLocation().getDirection(), points[i], rad)), ArmorStand.class, e -> {
-				e.setVisible(false);
-				e.setGravity(false);
-				e.setSmall(true);
-				e.setInvulnerable(true);
-				e.getEquipment().setHelmet(new ItemStack(Material.CRYING_OBSIDIAN));
-			});
+		if (enableCubeAnimation) {
+			this.cubes = new ArmorStand[3];
 
-			cubes[i] = cube;
+			for (int i = 0; i < cubes.length; i++) {
+				ArmorStand cube = player.getWorld().spawn(player.getLocation().clone().add(GeneralMethods.getOrthogonalVector(player.getLocation().getDirection(), points[i], rad)), ArmorStand.class, e -> {
+					e.setVisible(false);
+					e.setGravity(false);
+					e.setSmall(true);
+					e.setInvulnerable(true);
+					e.getEquipment().setHelmet(new ItemStack(Material.CRYING_OBSIDIAN));
+				});
+
+				cubes[i] = cube;
+			}
 		}
-		player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1, 0.25F);
+		player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.5F, 0.25F);
 		start();
 	}
 
@@ -126,18 +131,24 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 				double inc = (1.5 / (chargeTime / 1000.0)) / 20.0;
 
 				for (int i = 0; i < 3; i++) {
-					player.getWorld().spawnParticle(Particle.WITCH, cubes[i].getEyeLocation(), 1, 0.3, 0.3, 0.3, 0);
+					if (enableCubeAnimation) {
+						player.getWorld().spawnParticle(Particle.WITCH, cubes[i].getEyeLocation(), 1, 0.3, 0.3, 0.3, 0);
 
-					cubes[i].teleport(particle.clone().add(GeneralMethods.getOrthogonalVector(particle.getDirection(), points[i], rad)));
+						cubes[i].teleport(particle.clone().add(GeneralMethods.getOrthogonalVector(particle.getDirection(), points[i], rad)));
+					} else {
+						player.getWorld().spawnParticle(Particle.WITCH, particle.clone().add(0, 1, 0).add(GeneralMethods.getOrthogonalVector(particle.getDirection(), points[i], rad)), 5, 0, 0, 0, 0);
+					}
 					points[i] += 3;
 				}
 				rad -= inc;
 			} else {
-				if (cubes[0] != null && cubes[0].isValid()) {
-					particle = particle.add(0, -1, 0);
+				if (enableCubeAnimation) {
+					if (cubes[0] != null && cubes[0].isValid()) {
+						particle = particle.add(0, -1, 0);
 
-					for (ArmorStand cube : cubes) {
-						cube.teleport(particle);
+						for (ArmorStand cube : cubes) {
+							cube.teleport(particle);
+						}
 					}
 				}
 			}
@@ -155,25 +166,31 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 		}
 	}
 
-	public void shootBolt() {
-		if (numBolts == maxBolts) {
-			Location l = player.getLocation().clone().add(0, 1, 0).add(player.getLocation().getDirection().normalize().multiply(1.5));
-
-			for (int i = 0; i < 360; i += 9) {
-				Vector circle = GeneralMethods.getOrthogonalVector(l.getDirection(), i, ThreadLocalRandom.current().nextDouble(1.5));
-				player.getWorld().spawnParticle(Particle.DRAGON_BREATH, l.clone().add(GeneralMethods.getOrthogonalVector(l.getDirection(), i, 0.2)), 0, circle.getX(), circle.getY(), circle.getZ(), 0.10);
-			}
+	private void removeCubes() {
+		if (enableCubeAnimation) {
 			for (ArmorStand cube : cubes) {
 				if (cube != null && cube.isValid()) {
 					cube.remove();
 				}
 			}
+		}
+	}
+
+	public void shootBolt() {
+		if (numBolts == maxBolts) {
+			removeCubes();
 			started = true;
 		}
 		if (numBolts <= 0) {
 			return;
 		}
-		player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 1, 0);
+		Location l = player.getLocation().clone().add(0, 1, 0).add(player.getLocation().getDirection().normalize().multiply(1.5));
+
+		for (int i = 0; i < 360; i += 9) {
+			Vector circle = GeneralMethods.getOrthogonalVector(l.getDirection(), i, ThreadLocalRandom.current().nextDouble(1.5));
+			player.getWorld().spawnParticle(Particle.DRAGON_BREATH, l.clone().add(GeneralMethods.getOrthogonalVector(l.getDirection(), i, 0.2)), 0, circle.getX(), circle.getY(), circle.getZ(), 0.10);
+		}
+		player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_DEACTIVATE, 0.5F, 0);
 
 		--numBolts;
 
@@ -251,12 +268,7 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 	@Override
 	public void remove() {
 		super.remove();
-
-		for (ArmorStand cube : cubes) {
-			if (cube != null) {
-				cube.remove();
-			}
-		}
+		removeCubes();
 	}
 
 	@Override
