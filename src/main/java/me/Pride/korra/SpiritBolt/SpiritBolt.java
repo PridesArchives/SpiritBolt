@@ -43,6 +43,7 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 	private long chargeTime;
 	private int maxBolts;
 	private boolean enableCubeAnimation;
+	private boolean allowReleaseSneak;
 
 	private int numBolts;
 	private boolean charged;
@@ -59,8 +60,6 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 	private int[] points;
 	private ArmorStand[] cubes;
 
-	private static final Listener listener = new SpiritBoltListener();
-
 	public SpiritBolt(Player player) {
 		super(player);
 
@@ -71,6 +70,7 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 		this.chargeTime = ConfigManager.getConfig().getLong(config + "ChargeTime");
 		this.maxBolts = ConfigManager.getConfig().getInt(config + "MaxBolts");
 		this.enableCubeAnimation = ConfigManager.getConfig().getBoolean(config + "EnableCubeAnimation");
+		this.allowReleaseSneak = ConfigManager.getConfig().getBoolean(config + "AllowReleaseSneak");
 
 		this.numBolts = maxBolts;
 
@@ -119,7 +119,13 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 			remove();
 			return;
 		}
-		if (player.isSneaking()) {
+		if (player.isSneaking() || charged) {
+			if (charged && !player.isSneaking()) {
+				if (!allowReleaseSneak) {
+					remove();
+					return;
+				}
+			}
 			Location particle = player.getLocation().clone().add(player.getLocation().getDirection().normalize().multiply(1));
 
 			if (System.currentTimeMillis() > getStartTime() + chargeTime) {
@@ -285,27 +291,45 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 
 	@Override
 	public String getAuthor() {
-		return "Prride";
+		return altColor() + "Prride";
 	}
 
 	@Override
 	public String getVersion() {
-		ChatColor color = Element.AVATAR.getSubColor();
+		return altColor() + version();
+	}
 
-		if (color == null || color.equals("")) {
-			color = ChatColor.of("#A685A5");
-		}
-		return color + version();
+	@Override
+	public String getDescription() {
+		return color() + "SpiritBolt is a highly focused version of the Avatar's SpiritBeam. By concentrating on your power output, you are able to fire multiple shots of a destructive beam of spirit energy!";
+	}
+
+	@Override
+	public String getInstructions() {
+		return ChatColor.GOLD + "Hold sneak until charged (when particles are centered), then left click to fire a bolt.";
 	}
 
 	public static String version() {
 		return "VERSION 1";
 	}
 
+	public static ChatColor color() {
+		ChatColor color = Element.AVATAR.getSubColor();
+
+		if (color == null || color.equals("")) {
+			color = ChatColor.of("#A685A5");
+		}
+		return color;
+	}
+
+	public static ChatColor altColor() {
+		return ChatColor.of("#4F3882");
+	}
+
 	@Override
 	public void load() {
 		ProjectKorra.log.info("Succesfully loaded " + getName() + ": " + version() + ", by " + getAuthor() + "!");
-		ProjectKorra.plugin.getServer().getPluginManager().registerEvents(listener, ProjectKorra.plugin);
+		ProjectKorra.plugin.getServer().getPluginManager().registerEvents(new SpiritBoltListener(), ProjectKorra.plugin);
 
 		FileConfiguration configuration = ConfigManager.getConfig();
 
@@ -319,6 +343,8 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 		configuration.addDefault("ExtraAbilities.Prride.SpiritBolt.DestroyBlocks.Enabled", true);
 		configuration.addDefault("ExtraAbilities.Prride.SpiritBolt.DestroyBlocks.Radius", 1.5);
 		configuration.addDefault("ExtraAbilities.Prride.SpiritBolt.DestroyBlocks.RevertTime", 10000);
+		configuration.addDefault("ExtraAbilities.Prride.SpiritBolt.EnableCubeAnimation", true);
+		configuration.addDefault("ExtraAbilities.Prride.SpiritBolt.AllowReleaseSneak", true);
 
 		ConfigManager.defaultConfig.save();
 	}
@@ -326,8 +352,6 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 	@Override
 	public void stop() {
 		ProjectKorra.log.info("Stopped " + getAuthor() + "'s " + getName() + "!");
-
-		HandlerList.unregisterAll(listener);
 	}
 
 	class Bolt {
@@ -384,11 +408,11 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 						Location blockLocation = blocks.get(ThreadLocalRandom.current().nextInt(blocks.size())).getLocation();
 
 						if (blocks.size() <= 2) {
-							blockLocation.getWorld().playSound(blockLocation, Sound.ENTITY_GENERIC_EXPLODE, 0.5F, 0.8F);
+							blockLocation.getWorld().playSound(blockLocation, Sound.ENTITY_GENERIC_EXPLODE, 0.1F, 0.8F);
 							blockLocation.getWorld().spawnParticle(Particle.EXPLOSION, blockLocation, 1, 0, 0, 0, 0);
 						} else {
 							if (ThreadLocalRandom.current().nextInt(10) == 0) {
-								blockLocation.getWorld().playSound(blockLocation, Sound.ENTITY_GENERIC_EXPLODE, 0.5F, 0.8F);
+								blockLocation.getWorld().playSound(blockLocation, Sound.ENTITY_GENERIC_EXPLODE, 0.1F, 0.8F);
 								blockLocation.getWorld().spawnParticle(Particle.EXPLOSION, blockLocation, 1, 0, 0, 0, 0);
 							}
 						}
@@ -457,27 +481,35 @@ public class SpiritBolt extends AvatarAbility implements AddonAbility {
 		public void setRange(double range) {
 			this.range = range;
 		}
+
 		public double getDestroyRadius() {
 			return destroyRadius;
 		}
+
 		public void setDestroyRadius(double destroyRadius) {
 			this.destroyRadius = destroyRadius;
 		}
+
 		public long getRevertTime() {
 			return revertTime;
 		}
+
 		public void setRevertTime(long revertTime) {
 			this.revertTime = revertTime;
 		}
+
 		public int getFireTicks() {
 			return fireTicks;
 		}
+
 		public void setFireTicks(int fireTicks) {
 			this.fireTicks = fireTicks;
 		}
+
 		public Location getOrigin() {
 			return origin;
 		}
+
 		public List<Location> getLocations() {
 			return locations;
 		}
